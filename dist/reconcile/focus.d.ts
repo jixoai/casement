@@ -1,0 +1,43 @@
+/**
+ * Focus is a request, not a state.
+ *
+ * A `focused: boolean` in the tree is wrong in a way that is hard to see until
+ * it bites: focus is not something the app owns. The user clicks another
+ * window, the OS takes focus away, and now the tree says `true` while the screen
+ * says otherwise. The next commit then "corrects" the screen by stealing focus
+ * back — a window that fights the user.
+ *
+ * The fix is to model it as what it actually is: a counter of requests. Asking
+ * for focus bumps a sequence number and names a target. The reconciler applies a
+ * request when the sequence is newer than the last one it applied, and then
+ * forgets about it. Re-rendering the same tree does not re-apply it, because the
+ * counter has not moved. Nothing tries to keep the screen's focus equal to a
+ * stored value, so there is nothing to fight over.
+ *
+ * "Who has focus right now" is still available — but it is a *query* answered by
+ * the host (see actual/state.ts), not a field the app writes.
+ */
+import type { WindowId } from '../types.ts';
+/** The focus request counter. */
+export interface FocusRequest {
+    /** The latest request's sequence number. Monotonic. */
+    readonly seq: number;
+    /** What the latest request names, or null for "nothing". */
+    readonly target: WindowId | null;
+    /** The highest sequence number already applied to the host. */
+    readonly appliedSeq: number;
+}
+/** No focus has ever been requested. */
+export declare const NO_FOCUS: FocusRequest;
+/**
+ * Record a new focus request.
+ *
+ * Deliberately returns a new value rather than mutating: the loop holds one and
+ * the app holds another, and a shared mutable counter is how "did I already
+ * apply this" bugs start.
+ */
+export declare function requestFocus(current: FocusRequest, target: WindowId | null): FocusRequest;
+/** Mark a request as applied. */
+export declare function markApplied(current: FocusRequest, seq: number): FocusRequest;
+/** Whether there is an outstanding request. */
+export declare function hasPendingFocus(request: FocusRequest): boolean;
