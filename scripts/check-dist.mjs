@@ -11,9 +11,14 @@
  */
 import { execFileSync } from 'node:child_process';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { dirname, join, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const root = new URL('..', import.meta.url).pathname;
+// fileURLToPath, not URL.pathname: on Windows the latter yields "/E:/..." with a
+// leading slash, and every join() off it then points at a path that does not
+// exist — which made this script report "dist/ is missing" for a dist/ that was
+// right there.
+const root = dirname(dirname(fileURLToPath(import.meta.url)));
 
 function newestMtime(dir) {
   let newest = 0;
