@@ -140,3 +140,34 @@ test('geometry is pure: the same inputs give the same rects', () => {
   assert.notEqual(a, b);
   assert.deepEqual(a, b);
 });
+test('an anchored extent can use a different margin on each axis', () => {
+  // The browser's floats sit 12px from the side and 8px below the chrome bar.
+  // A single-number margin could not express that, and rounding it to one value
+  // would move every float by 4px — so the asymmetry is part of the contract.
+  const ctx = {
+    window: { width: 1000, height: 700 },
+    chrome: 40,
+  };
+  const rect = projectExtent(
+    {
+      kind: 'anchored',
+      corner: 'top-right',
+      margin: { x: 12, y: 8 },
+      size: { width: 320, height: 220 },
+    },
+    ctx,
+  );
+  assert.deepEqual(rect, { x: 1000 - 320 - 12, y: 40 + 8, width: 320, height: 220 });
+});
+
+test('a numeric margin still behaves symmetrically', () => {
+  const ctx = {
+    window: { width: 1000, height: 700 },
+    chrome: 40,
+  };
+  const rect = projectExtent(
+    { kind: 'anchored', corner: 'top-right', margin: 12, size: { width: 320, height: 220 } },
+    ctx,
+  );
+  assert.deepEqual(rect, { x: 1000 - 320 - 12, y: 40 + 12, width: 320, height: 220 });
+});

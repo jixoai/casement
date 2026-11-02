@@ -99,15 +99,16 @@ export function projectExtent(extent, ctx) {
             // float bigger than the content area would otherwise hang off the edge with
             // no way to reach it, and one that merely touched the edge would lose the
             // gap that tells the user it is floating rather than docked.
-            const margin = Math.max(0, extent.margin);
-            const maxWidth = Math.max(0, reference.width - margin * 2);
-            const maxHeight = Math.max(0, reference.height - margin * 2);
+            const mx = typeof extent.margin === 'number' ? Math.max(0, extent.margin) : Math.max(0, extent.margin.x);
+            const my = typeof extent.margin === 'number' ? Math.max(0, extent.margin) : Math.max(0, extent.margin.y);
+            const maxWidth = Math.max(0, reference.width - mx * 2);
+            const maxHeight = Math.max(0, reference.height - my * 2);
             const width = Math.min(Math.max(0, extent.size.width), maxWidth);
             const height = Math.min(Math.max(0, extent.size.height), maxHeight);
-            const left = reference.x + margin;
-            const right = reference.x + reference.width - width - margin;
-            const top = reference.y + margin;
-            const bottom = reference.y + reference.height - height - margin;
+            const left = reference.x + mx;
+            const right = reference.x + reference.width - width - mx;
+            const top = reference.y + my;
+            const bottom = reference.y + reference.height - height - my;
             // Both edges are inside the reference box once the size has been clamped
             // to it, so the corner only chooses which edge to align to.
             switch (extent.corner) {

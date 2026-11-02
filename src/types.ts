@@ -84,7 +84,15 @@ export type Extent =
   | {
       readonly kind: 'anchored';
       readonly corner: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
-      readonly margin: number;
+      /**
+       * Gap between the float and the edge it is anchored to.
+       *
+       * A single number for the symmetric case; `{ x, y }` when the design wants
+       * different gaps on each axis. That asymmetry is not hypothetical — the
+       * browser's own floats sit 12px from the side and 8px below the chrome bar,
+       * and rounding it to one number would shift every float by 4px.
+       */
+      readonly margin: number | { readonly x: number; readonly y: number };
       readonly size: Size;
       /** Which box to anchor against. Defaults to `content`. */
       readonly against?: 'fill' | 'content';
