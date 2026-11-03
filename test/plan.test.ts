@@ -115,3 +115,62 @@ test('plan ignores a layer that is not inside a window', () => {
   assert.equal(state.windows.size, 0);
   void orphan;
 });
+
+/**
+ * INV-4 —— 内容层稳定。
+ *
+ * 承接自 view-stack：事故 ⑤（旧画廊用 chrome 面 Dialog，真实网页被内容 view 整层盖住；
+ * 旧面板 yieldRight 让位竟等于「把网页 resize」）。
+ *
+ * 这条不变量的机制是**类型层面**的：content 的 rect 只由 `chromeHeight()` 投影得出，
+ * 而 `chromeHeight(metrics)` 的签名里没有任何层状态——浮层开与不开，不可能进入这个函数的输入。
+ * 本用例把「全部浮层同时在场」与「全部浮层不在场」两种树各规划一次，逐字段比对 content rect，
+ * 以此把这条类型保证钉成可执行断言（design §14 记的「待补」项）。
+ */
+test('INV-4: toggling every float overlay leaves the content rect untouched', () => {
+  const sized = () => windowNode({ id: 'w', width: 1200, height: 800 });
+  const content = () =>
+    layerNode({ name: 'content', viewId: 'v-content', extent: { kind: 'content' } });
+  const chrome = () =>
+    layerNode({ name: 'chrome', viewId: 'v-chrome', extent: { kind: 'chrome' } });
+
+  // 三块浮层，形状覆盖事故 ⑤ 与 ⑥ 的现场：铺满式遮罩、锚定浮窗、以及一条 chrome 通道。
+  const floats = () => [
+    layerNode({ name: 'aiMask', viewId: 'v-mask', extent: { kind: 'fill' } }),
+    layerNode({
+      name: 'pairedFloat',
+      viewId: 'v-float',
+      extent: {
+        kind: 'anchored',
+        corner: 'top-right',
+        margin: { x: 12, y: 8 },
+        size: { width: 320, height: 240 },
+      },
+    }),
+    layerNode({ name: 'findBar', viewId: 'v-find', extent: { kind: 'chrome' } }),
+  ];
+
+  const without = planWindow(withChildren(sized(), [content(), chrome()]), {
+    chrome: TEST_CHROME_SPEC,
+  });
+  const withAll = planWindow(withChildren(sized(), [content(), chrome(), ...floats()]), {
+    chrome: TEST_CHROME_SPEC,
+  });
+
+  const boundsOf = (d: typeof without, id: string) => d.views.find((v) => v.id === id)?.bounds;
+  const a = boundsOf(without, 'v-content');
+  const b = boundsOf(withAll, 'v-content');
+
+  assert.ok(a && b, 'content layer must exist in both plans');
+  // 逐字段相等（不是「大致相等」——这条不变量要求四个字段全都一样）
+  assert.deepEqual(Object.keys(b!).sort(), ['height', 'width', 'x', 'y']);
+  assert.equal(b!.x, a!.x);
+  assert.equal(b!.y, a!.y);
+  assert.equal(b!.width, a!.width);
+  assert.equal(b!.height, a!.height);
+
+  // 并且它仍然是「chrome 之下、全宽」，即事故 ⑤ 的让位语义在内核里不存在。
+  assert.equal(b!.x, 0);
+  assert.equal(b!.width, 1200);
+  assert.equal(b!.y, TEST_CHROME_SPEC.tabStrip);
+});

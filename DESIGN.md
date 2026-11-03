@@ -83,6 +83,50 @@ Six decisions, each with the alternative that was rejected.
 
 **Cost.** The loop can run more than once for a single change (create → attach → size → show is genuinely several host-visible steps). Capped at 4 passes, and measured: a full converge is sub-millisecond against the memory adapter.
 
+## Lineage: the six incidents this design has to survive
+
+This library replaces an imperative view-stack in a real browser (`fde2e-browser-v0`). That
+predecessor accumulated six production incidents and seven invariants. They are kept as
+acceptance material rather than as history: declarative z-order should be immune to all six,
+and a claim of immunity is worth nothing unless it is executable. Each row names the assertion
+that now holds the line.
+
+| # | Incident | Why it cannot happen here | Held by |
+| --- | --- | --- | --- |
+| ① | Chrome layer hoisted to the top and stuck there — the content area went 100% black while offscreen capture still looked healthy | `chrome` and `content` are separate extents projected from the window box, so one cannot cover the other. There is no "hoist": stacking is declaration order, not an operation | `geometry.test` — *content and chrome tile the window exactly* |
+| ② | Views structurally correct but never reaching the native compositor | **Out of scope, deliberately.** That is a GPU/environment fault, not a layout fault. Convergence is idempotent so re-attaching still fixes it, but this library does not probe the GPU | GAP-1 (see below) |
+| ③ | "Attached later = drawn on top" — the content view landed above the effects canvas | The reorder pass walks absolute indices bottom-up, so one ascending pass reaches the target order from any arrangement. Where an attach lands is irrelevant, and there is no `ensureTopmost` | `diff.test` — *a view that moved is reordered, never detached* |
+| ④ | Hand-computed bounds: making room for a side panel shrank the page view instead, and a black band was invisible for months | Rects are projected from extents. `content` is always full width at `x=0`; "making room" is not an operation — overlays cover, they do not squeeze | `geometry.test` — *contentRect sits below the chrome and keeps full width* |
+| ⑤ | A chrome-face dialog drew *under* the content view, so the real page covered it; the fix narrowed the page view, i.e. resized the web page | Same as ①, plus `chromeHeight(metrics)` takes no layer state — an overlay toggle has no way into the content rect's inputs | `plan.test` — *INV-4: toggling every float overlay leaves the content rect untouched* |
+| ⑥ | Two features each claimed "topmost" and fought; an assertion that the canvas must be the last child was mutually exclusive with a float being present | Exactly one topmost: the last thing declared. No hoist, no second claim | `diff.test` — ordering assertions; `reconcile.test` — *reordering layers converges to the document order* |
+
+The seven invariants inherited from that work map onto this library as follows.
+
+| Invariant | Where it lives |
+| --- | --- |
+| INV-1 canonical order | Declaration order *is* stacking order — `diff` reorder pass, `diff.test` |
+| INV-2 atomic convergence | `reconcile` loops until the diff is empty, re-reading `actual` each pass — `reconcile.test`, `DEFAULT_MAX_PASSES = 4` |
+| INV-3 layout is a pure function | `projectExtent(extent, { window, chrome })` — `geometry.test` |
+| INV-4 the content layer is stable | `chromeHeight()` takes no layer state; asserted explicitly in `plan.test` (added 2026-11-03) |
+| INV-5 zero-surface discipline | Not interactive means `visible: false` (rect kept, hit-testing off) or `extent: hidden` (no surface). There is no `setIgnoreInputEvents` |
+| INV-6 mutually exclusive groups | Encode exclusivity by rendering one of them. The tree cannot express both at once, so there is no detach-then-attach dance |
+| INV-7 observable | `adapter.snapshot()` is the single source of truth — GAP-2 |
+
+### Gaps, stated rather than hidden
+
+**GAP-1 — GPU compositor loss is not detected.** A window whose views are structurally perfect
+but which never reaches the native compositor will not be repaired by this library. That stays
+the host's job: keep the existing self-heal trigger, and have it call `converge()` instead of
+hand-rolling a re-attach. Convergence is idempotent, so this is still the right repair.
+
+**GAP-2 — `debug*Layout` probes need host-side adaptation.** The probes exist for diagnostics and
+their public signatures are unchanged, but their bodies must be re-pointed at
+`adapter.snapshot()`. That is a mechanical edit in the host application, not in this library.
+
+**Closed — INV-4 had no explicit assertion.** The design promised "turning overlays on and off
+does not move the content rect" but only relied on the type signature. As of 2026-11-03
+`plan.test` asserts it field by field, and the assertion was mutation-checked: make the content
+rect genuinely shift (open a chrome lane) and the test fails.
 ## Accepted costs
 
 These are known, permanent, and not going to be fixed by trying harder.
